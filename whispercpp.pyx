@@ -83,6 +83,7 @@ cdef whisper_full_params default_params() nogil:
 cdef class Whisper:
     cdef whisper_context * ctx
     cdef whisper_full_params params
+    cdef bytes _language_bytes
 
     def __init__(self, model=DEFAULT_MODEL, pb=None, buf=None):
         
@@ -97,13 +98,16 @@ cdef class Whisper:
             self.ctx = whisper_init_from_file(model_b)
         
         self.params = default_params()
+        # store language bytes to ensure lifetime for C pointer
+        self._language_bytes = LANGUAGE
+        self.params.language = self._language_bytes
         whisper_print_system_info()
 
 
     def __dealloc__(self):
         whisper_free(self.ctx)
 
-    def transcribe(self, filename=TEST_FILE):
+    def transcribe(self, filename=TEST_FILE, language=None):
         print("Loading data..")
         if (type(filename) == np.ndarray) :
             temp = filename
@@ -113,6 +117,14 @@ cdef class Whisper:
         else :
             temp = load_audio(<bytes>TEST_FILE)
 
+        if language is not None:
+            if isinstance(language, str):
+                self._language_bytes = language.encode('utf8')
+            elif isinstance(language, bytes):
+                self._language_bytes = language
+            else:
+                raise TypeError("language must be str or bytes")
+            self.params.language = self._language_bytes
         
         cdef cnp.ndarray[cnp.float32_t, ndim=1, mode="c"] frames = temp
 
